@@ -1,3 +1,12 @@
+// Copyright 2019 Chris Koch. All rights reserved
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// +build go1.12
+
+// Package socketpair provides bidirectionally connected net.PacketConns.
+//
+// Intended for testing usages of net.PacketConns.
 package socketpair
 
 import (
