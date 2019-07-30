@@ -4,9 +4,9 @@
 
 // +build go1.12
 
-// Package socketpair provides bidirectionally connected net.PacketConns.
+// Package socketpair provides bidirectionally connected net.Conns.
 //
-// Intended for testing usages of net.PacketConns.
+// Intended for testing usages of net.PacketConns and net.Conns.
 package socketpair
 
 import (
@@ -16,7 +16,66 @@ import (
 	"time"
 )
 
-// PacketSocketPair returns two bidirectionally connected PacketConns.
+// TCPPair returns two bidirectionally connected TCPConns.
+//
+// They will be on randomly assigned ports.
+func TCPPair() (*net.TCPConn, *net.TCPConn, error) {
+	l, err := net.ListenTCP("tcp4", nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	serverAddr := l.Addr().(*net.TCPAddr)
+
+	type acceptRet struct {
+		c   *net.TCPConn
+		err error
+	}
+	serverConnCh := make(chan acceptRet)
+	go func() {
+		c, err := l.AcceptTCP()
+		serverConnCh <- acceptRet{c: c, err: err}
+	}()
+
+	clientConn, err := net.DialTCP("tcp4", nil, serverAddr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	accept := <-serverConnCh
+	if accept.err != nil {
+		return nil, nil, accept.err
+	}
+	return clientConn, accept.c, nil
+}
+
+// StreamSocketPair returns two bidirectionally connected net.Conns made from
+// socketpair(2).
+func StreamSocketPair() (net.Conn, net.Conn, error) {
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := syscall.SetNonblock(int(fds[0]), true); err != nil {
+		return nil, nil, err
+	}
+	if err := syscall.SetNonblock(int(fds[1]), true); err != nil {
+		return nil, nil, err
+	}
+
+	c0, err := net.FileConn(os.NewFile(uintptr(fds[0]), "socketpair-0"))
+	if err != nil {
+		return nil, nil, err
+	}
+	c1, err := net.FileConn(os.NewFile(uintptr(fds[1]), "socketpair-1"))
+	if err != nil {
+		return nil, nil, err
+	}
+	return c0, c1, nil
+}
+
+// PacketSocketPair returns two bidirectionally connected PacketConns made from
+// socketpair(2).
 func PacketSocketPair() (net.PacketConn, net.PacketConn, error) {
 	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_DGRAM, 0)
 	if err != nil {
