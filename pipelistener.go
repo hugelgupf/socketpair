@@ -24,17 +24,32 @@ import (
 // Listener implements a listener that creates local, buffered net.Pipe-backed
 // net.Conns via its Accept and Dial methods.
 type Listener struct {
-	mu   sync.Mutex
-	done chan struct{}
-	conn chan net.Conn
+	mu     sync.Mutex
+	done   chan struct{}
+	conn   chan net.Conn
+	pipeFn func() (net.Conn, net.Conn, error)
 }
 
 // Listen returns a Listener that can only be contacted by its own Dialers and
-// creates buffered connections between the two.
+// creates net.Pipe-backed unbuffered connections between the two.
 func Listen() *Listener {
 	return &Listener{
 		done: make(chan struct{}),
 		conn: make(chan net.Conn),
+		pipeFn: func() (net.Conn, net.Conn, error) {
+			p1, p2 := net.Pipe()
+			return p1, p2, nil
+		},
+	}
+}
+
+// ListenFunc returns a Listener that can only be contacted by its own Dialers
+// and creates connections between the two using the supplied function.
+func ListenFunc(pipeFunc func() (net.Conn, net.Conn, error)) *Listener {
+	return &Listener{
+		done:   make(chan struct{}),
+		conn:   make(chan net.Conn),
+		pipeFn: pipeFunc,
 	}
 }
 
@@ -76,7 +91,10 @@ func (l *Listener) Dial() (net.Conn, error) {
 // Accept by providing it the server half of the connection, and returns the
 // client half of the connection. If ctx is Done, returns ctx.Err()
 func (l *Listener) DialContext(ctx context.Context) (net.Conn, error) {
-	p1, p2 := net.Pipe()
+	p1, p2, err := l.pipeFn()
+	if err != nil {
+		return nil, err
+	}
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
