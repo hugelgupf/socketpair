@@ -14,11 +14,22 @@ import (
 	"time"
 )
 
+// TCPPair6 returns two bidirectionally connected TCPConns using tcp6.
+//
+// They will be on randomly assigned ports.
+func TCPPair6() (*net.TCPConn, *net.TCPConn, error) {
+	return tcpPair("tcp6")
+}
+
 // TCPPair returns two bidirectionally connected TCPConns.
 //
 // They will be on randomly assigned ports.
 func TCPPair() (*net.TCPConn, *net.TCPConn, error) {
-	l, err := net.ListenTCP("tcp4", nil)
+	return tcpPair("tcp4")
+}
+
+func tcpPair(network string) (*net.TCPConn, *net.TCPConn, error) {
+	l, err := net.ListenTCP(network, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -34,7 +45,7 @@ func TCPPair() (*net.TCPConn, *net.TCPConn, error) {
 		serverConnCh <- acceptRet{c: c, err: err}
 	}()
 
-	clientConn, err := net.DialTCP("tcp4", nil, serverAddr)
+	clientConn, err := net.DialTCP(network, nil, serverAddr)
 	if err != nil {
 		return nil, nil, err
 	}
